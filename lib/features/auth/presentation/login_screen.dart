@@ -1,9 +1,9 @@
 // lib/features/auth/presentation/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart'; // Importação necessária para o context.push funcionar
+import 'package:go_router/go_router.dart';
 
-import 'auth_controller.dart';
+import '../domain/auth_controller.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -25,22 +25,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. ESCUTA DE ERROS: Se houver erro no login, mostra um SnackBar (aviso na parte inferior)
+    // Escuta mudanças no estado de autenticação (Erros e Sucesso)
     ref.listen<AsyncValue>(
       authControllerProvider,
-      (_, state) {
-        if (state.hasError) {
+      (previous, next) {
+        if (next.hasError) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(state.error.toString()),
+              content: Text(next.error.toString()),
               backgroundColor: Colors.red,
             ),
           );
+        } else if (!next.isLoading && !next.hasError && previous?.isLoading == true) {
+          // Redireciona para a Home em caso de sucesso
+          context.go('/home');
         }
       },
     );
 
-    // 2. ESTADO DA TELA: Verifica se está no modo de carregamento
     final authState = ref.watch(authControllerProvider);
     final isLoading = authState.isLoading;
 
@@ -52,7 +54,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Logo provisória
               Icon(Icons.fitness_center, size: 80, color: Theme.of(context).primaryColor),
               const SizedBox(height: 24),
               const Text(
@@ -62,7 +63,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 48),
               
-              // Campo de E-mail
+              // E-mail
               TextFormField(
                 controller: _emailController,
                 decoration: const InputDecoration(
@@ -75,7 +76,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 16),
               
-              // Campo de Senha
+              // Senha
               TextFormField(
                 controller: _passwordController,
                 decoration: const InputDecoration(
@@ -88,14 +89,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 24),
               
-              // Botão de Entrar
+              // Botão Entrar
               ElevatedButton(
                 onPressed: isLoading
-                    ? null // Desabilita o botão se estiver carregando
+                    ? null
                     : () {
                         ref.read(authControllerProvider.notifier).signIn(
-                              _emailController.text,
-                              _passwordController.text,
+                              _emailController.text.trim(),
+                              _passwordController.text.trim(),
                             );
                       },
                 style: ElevatedButton.styleFrom(
@@ -106,7 +107,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     : const Text('ENTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
               
-              // AQUI ESTÁ O CÓDIGO NOVO CORRIGIDO (Fica abaixo do ElevatedButton)
               const SizedBox(height: 16),
               TextButton(
                 onPressed: isLoading ? null : () => context.push('/signup'),

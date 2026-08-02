@@ -41,6 +41,7 @@ class AuthRepository {
     required String password,
     required String fullName,
     required String role,
+    String? trainerId, // 🔴 CORREÇÃO 1: Adicionado o parâmetro opcional
   }) async {
     final response = await _supabase.auth.signUp(
       email: email,
@@ -53,6 +54,7 @@ class AuthRepository {
         'id': response.user!.id,
         'full_name': fullName,
         'role': role,
+        if (trainerId != null) 'trainer_id': trainerId, // 🔴 CORREÇÃO 2: Salva no banco apenas se não for nulo
       });
     }
   }

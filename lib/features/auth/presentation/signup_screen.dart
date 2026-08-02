@@ -2,8 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+// No topo do login_screen.dart e do signup_screen.dart:
 
-import 'auth_controller.dart';
+import '../domain/auth_controller.dart'; // 👈 Certifique-se de que o caminho é este!
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
@@ -16,6 +17,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _trainerIdController = TextEditingController(); // 🔴 Adicionado o controller do código
+  
   String _selectedRole = 'student'; // Padrão como Aluno
 
   @override
@@ -23,6 +26,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _trainerIdController.dispose(); // 🔴 Não esqueça de descartar aqui
     super.dispose();
   }
 
@@ -127,21 +131,46 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     : (value) {
                         setState(() {
                           _selectedRole = value!;
+                          // Limpa o código se mudar de ideia e virar professor
+                          if (_selectedRole == 'trainer') {
+                            _trainerIdController.clear();
+                          }
                         });
                       },
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+
+              // 🔴 Campo Condicional: Só aparece se for Aluno
+              if (_selectedRole == 'student') ...[
+                TextFormField(
+                  controller: _trainerIdController,
+                  decoration: const InputDecoration(
+                    labelText: 'Código do Professor (Opcional)',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.qr_code), // Um ícone legal para o código
+                    helperText: 'Peça o código de convite ao seu personal.',
+                  ),
+                  enabled: !isLoading,
+                ),
+                const SizedBox(height: 16),
+              ],
+              
+              const SizedBox(height: 8),
 
               // Botão de Cadastrar
               ElevatedButton(
                 onPressed: isLoading
                     ? null
                     : () {
+                        // 🔴 Aqui enviamos o trainerId se ele existir e for aluno
                         ref.read(authControllerProvider.notifier).signUp(
-                              email: _emailController.text,
-                              password: _passwordController.text,
-                              fullName: _nameController.text,
+                              email: _emailController.text.trim(),
+                              password: _passwordController.text.trim(),
+                              fullName: _nameController.text.trim(),
                               role: _selectedRole,
+                              trainerId: _selectedRole == 'student' && _trainerIdController.text.isNotEmpty
+                                  ? _trainerIdController.text.trim()
+                                  : null,
                             );
                       },
                 style: ElevatedButton.styleFrom(
