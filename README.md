@@ -74,7 +74,7 @@ Toda a carga de banco de dados, criptografia de senhas e persistência relaciona
 Composto pelo usuário (Aluno / Professor) interagindo com a aplicação e pelo Supabase (BaaS) atuando na nuvem.
 
 **3.4.2 Camada de Apresentação (UI)**  
-As Telas (`login_screen.dart`, `signup_screen.dart`, `home_screen.dart`) capturam os dados e toques do usuário, enquanto o GoRouter (`app_router.dart`) gerencia a injeção e proteção das rotas de navegação.
+As Telas (`login_screen.dart`, `signup_screen.dart`, `home_screen.dart`) capturam os dados e toques do usuário, enquanto o GoRouter (`app_router.dart`) gerencia a injeção e proteção das rotas de navegação. As Telas (`login_screen.dart`, `signup_screen.dart`, `home_screen.dart`, `workout_builder_screen.dart`) capturam...
 
 **3.4.3 Camada de Controle e Estado (Domínio)**  
 O Riverpod (`auth_controller.dart`) recebe ações da interface, emite e atualiza os estados (como `AsyncLoading`, `AsyncData`, `AsyncError`) e solicita operações de autenticação.
@@ -104,6 +104,9 @@ UI Passiva. Exibe botões, capta toques e reage ativando SnackBars (Toasts) ao l
 
 **3.5.6 home/presentation/home_screen.dart**  
 Dashboard inicial do usuário com banner de treino do dia, métricas de carga e navegação para funcionalidades chave.
+
+**3.5.7 workouts/presentation/workout_builder_screen.dart**  
+Interface de montagem de fichas do professor (Workout Builder): reordenação por gestos, inputs rápidos, notas customizadas, suporte a bi-sets e cadastro de exercícios próprios com links de vídeo/GIF.
 
 ---
 
