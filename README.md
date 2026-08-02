@@ -186,7 +186,7 @@ flutter run
 
 ---
 
-### 📤 Como atualizar o arquivo e subir pelo VS Code
+### 📤 Como atualizar o arquivo e subir pelo VS Code ###
 
 1. Abra o arquivo `README.md` no seu projeto dentro do VS Code.
 2. Substitua todo o conteúdo atual pelo código acima e salve (**`Ctrl + S`**).
