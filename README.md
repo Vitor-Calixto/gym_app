@@ -108,6 +108,9 @@ Dashboard inicial do usuário com banner de treino do dia, métricas de carga e 
 **3.5.7 workouts/presentation/workout_builder_screen.dart**  
 Interface de montagem de fichas do professor (Workout Builder): reordenação por gestos, inputs rápidos, notas customizadas, suporte a bi-sets e cadastro de exercícios próprios com links de vídeo/GIF.
 
+**3.5.7.2  workouts/presentation/workout_builder_screen.dart**  
+Interface de montagem de fichas do professor (Workout Builder): reordenação fluida com suporte ao novo `onReorderItem`, chaves de segurança `ValueKey`, prevenção de vazamento de memória (`dispose`), inputs rápidos, notas customizadas, suporte a bi-sets, validações de salvamento e cadastro de exercícios próprios com links de vídeo/GIF.
+
 ---
 
 ## 💎 4. Regras de Acesso e RBAC (Role-Based Access Control)
@@ -181,6 +184,13 @@ flutter run
 * [x] **Fase 1 - Modelagem Supabase & Segurança:** Criação do Schema SQL (tabelas e relacionamentos) e regras de RLS (Row Level Security).
 * [x] **Fase 2 - Setup Flutter & Arquitetura Local:** Estruturação de pastas (Feature-First), setup do Isar DB (offline) e configuração do Riverpod/GoRouter.
 * [x] **Fase 3 - Auth & Vínculo:** Autenticação via Supabase, RBAC, fluxos de login, cadastro, navegação para Dashboard e gestão de sessão.
+* [x] **Fase 3.1 - Motor de Montagem de Fichas (Workout Builder):** Refatoração e otimização do construtor de treinos, migração para `onReorderItem`, correções de `ValueKey`, limpeza de memória (`dispose`) e validações estritas de salvamento.
+* [ ] **Fase 3.2 - Mapeamento e Arquitetura do Backend (Supabase):** Definição estrutural dos fluxos de dados para:
+  * **Tela de Perfil:** Gerenciamento de dados pessoais, alteração de senha/e-mail via Supabase Auth e tabela `profiles`.
+  * **Tela Financeira:** Tabelas de assinaturas (`subscriptions`) e histórico de faturas/pagamentos (`invoices`).
+  * **Gestão de Alunos (Filtros Dinâmicos):** Consultas condicionais para abas de Ativos, Inativos e Fichas Vencidas.
+  * **Edição de Fichas Existentes:** Carregamento de treinos salvos por `workoutId` para reedição fluida pelo professor.
+  * **Avaliação Física:** Estruturação da tabela `physical_evaluations` para histórico de medidas corporais e percentual de gordura (BF).
 * [ ] **Fase 4 - Motor de Treinos & Sincronização:** CRUD de exercícios, templates e tela de execução offline isolando a UI do cronômetro.
 * [ ] **Fase 5 - Gamificação & Agendamento:** Lógica de check-in geolocalizado, sistema de XP, ranks e reservas inteligentes.
 * [ ] **Fase 6 - Pagamentos & Webhooks:** Integração com Gateway de Pagamentos (Asaas/Stripe) via tokens e liberação de acesso seguro por Edge Functions.
