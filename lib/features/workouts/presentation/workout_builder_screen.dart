@@ -1,15 +1,29 @@
 // lib/features/workouts/presentation/workout_builder_screen.dart
 import 'package:flutter/material.dart';
+import '../data/workout_repository.dart';
 
 class WorkoutBuilderScreen extends StatefulWidget {
-  const WorkoutBuilderScreen({super.key});
+  final String studentId;
+  final String studentName;
+
+  const WorkoutBuilderScreen({
+    super.key,
+    required this.studentId,
+    required this.studentName,
+  });
 
   @override
   State<WorkoutBuilderScreen> createState() => _WorkoutBuilderScreenState();
 }
 
 class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
-  // Lista estruturada para conter nome, séries, reps, descanso, nota e status de bi-set
+  final _repository = WorkoutRepository();
+  final _titleController = TextEditingController();
+  
+  bool _isLoading = false;
+  String _selectedFocus = 'Hipertrofia';
+
+  // Lista inicial limpa ou com estrutura padrão
   final List<Map<String, dynamic>> _selectedExercises = [
     {
       'name': 'Supino Reto com Barra',
@@ -30,6 +44,18 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
   ];
 
   @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: color),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -41,13 +67,16 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
       ),
       body: Column(
         children: [
-          // 1. Cabeçalho de Metadados
+          // ==========================================
+          // 1. CABEÇALHO DO TREINO (Título, Aluno, Foco)
+          // ==========================================
           Container(
             color: Colors.white,
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
                 TextFormField(
+                  controller: _titleController,
                   decoration: const InputDecoration(
                     labelText: 'Título do Treino (Ex: Treino A - Peito)',
                     border: OutlineInputBorder(),
@@ -56,31 +85,40 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
+                    // Exibição limpa do Aluno utilizando os dados passados por parâmetro
                     Expanded(
-                      child: DropdownButtonFormField<String>(
+                      child: InputDecorator(
                         decoration: const InputDecoration(
                           labelText: 'Aluno',
                           border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                         ),
-                        items: const [
-                          DropdownMenuItem(value: '1', child: Text('João Silva'))
-                        ],
-                        onChanged: (value) {},
+                        child: Text(
+                          widget.studentName,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
+                    // Dropdown de Foco funcional
                     Expanded(
                       child: DropdownButtonFormField<String>(
+                        value: _selectedFocus,
                         decoration: const InputDecoration(
                           labelText: 'Foco',
                           border: OutlineInputBorder(),
                           contentPadding: EdgeInsets.symmetric(horizontal: 12),
                         ),
                         items: const [
-                          DropdownMenuItem(value: '1', child: Text('Hipertrofia'))
+                          DropdownMenuItem(value: 'Hipertrofia', child: Text('Hipertrofia')),
+                          DropdownMenuItem(value: 'Emagrecimento', child: Text('Emagrecimento')),
+                          DropdownMenuItem(value: 'Força', child: Text('Força')),
+                          DropdownMenuItem(value: 'Resistência', child: Text('Resistência')),
                         ],
-                        onChanged: (value) {},
+                        onChanged: (value) {
+                          if (value != null) setState(() => _selectedFocus = value);
+                        },
                       ),
                     ),
                   ],
@@ -88,16 +126,18 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 8), 
 
-          // 2. Lista Reordenável de Exercícios
+          // ==========================================
+          // 2. LISTA REORDENÁVEL DE EXERCÍCIOS
+          // ==========================================
           Expanded(
             child: ReorderableListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               itemCount: _selectedExercises.length,
-              onReorder: (oldIndex, newIndex) {
+              onReorderItem: (oldIndex, newIndex) {
                 setState(() {
-                  if (oldIndex < newIndex) newIndex -= 1;
+                  // O onReorderItem já calcula o índice corrigido automaticamente!
                   final item = _selectedExercises.removeAt(oldIndex);
                   _selectedExercises.insert(newIndex, item);
                 });
@@ -105,7 +145,8 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
               itemBuilder: (context, index) {
                 final ex = _selectedExercises[index];
                 return Card(
-                  key: ValueKey(ex['name'] + index.toString()),
+                  key: ValueKey('${ex['name']}_$index'), // Correção na chave para evitar conflito de string
+                  // ... restante dos widgets do card ...
                   margin: const EdgeInsets.only(bottom: 12),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -149,43 +190,33 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
                             ),
                             IconButton(
                               icon: const Icon(Icons.close, color: Colors.redAccent, size: 20),
-                              onPressed: () {
-                                setState(() {
-                                  _selectedExercises.removeAt(index);
-                                });
-                              },
+                              onPressed: () => setState(() => _selectedExercises.removeAt(index)),
                             )
                           ],
                         ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            Expanded(child: _buildMiniInput('Séries', ex['sets'])),
+                            Expanded(child: _buildMiniInput('Séries', index, 'sets')),
                             const SizedBox(width: 8),
-                            Expanded(child: _buildMiniInput('Reps', ex['reps'])),
+                            Expanded(child: _buildMiniInput('Reps', index, 'reps')),
                             const SizedBox(width: 8),
-                            Expanded(child: _buildMiniInput('Pausa', ex['rest'])),
+                            Expanded(child: _buildMiniInput('Pausa', index, 'rest')),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Botão de Nota Rápida
                             TextButton.icon(
                               onPressed: () => _editNoteDialog(context, index),
                               icon: const Icon(Icons.chat_bubble_outline, size: 16),
                               label: Text(ex['note'].toString().isEmpty ? 'Adicionar nota' : 'Editar nota', style: const TextStyle(fontSize: 12)),
                             ),
-                            // Botão de Bi-set
                             IconButton(
                               icon: Icon(Icons.link, color: ex['isBiset'] ? Colors.orange : Colors.grey),
                               tooltip: 'Alternar Bi-set',
-                              onPressed: () {
-                                setState(() {
-                                  ex['isBiset'] = !ex['isBiset'];
-                                });
-                              },
+                              onPressed: () => setState(() => ex['isBiset'] = !ex['isBiset']),
                             )
                           ],
                         ),
@@ -209,7 +240,9 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
             ),
           ),
 
-          // 3. Botão Adicionar Exercício
+          // ==========================================
+          // 3. BOTÃO ADICIONAR NOVO EXERCÍCIO
+          // ==========================================
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: OutlinedButton.icon(
@@ -225,6 +258,10 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
           const SizedBox(height: 16),
         ],
       ),
+
+      // ==========================================
+      // 4. RODAPÉ FIXO: BOTÃO SALVAR NO BANCO
+      // ==========================================
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -232,10 +269,41 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
         ),
         child: ElevatedButton(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Ficha salva e enviada com sucesso!')),
-            );
+          onPressed: _isLoading ? null : () async {
+            if (_titleController.text.trim().isEmpty) {
+              _showSnackBar('Por favor, digite o título do treino!', Colors.red);
+              return;
+            }
+
+            if (_selectedExercises.isEmpty) {
+              _showSnackBar('Adicione pelo menos um exercício ao treino!', Colors.red);
+              return;
+            }
+
+            setState(() => _isLoading = true);
+
+            try {
+              await _repository.saveWorkout(
+                title: _titleController.text.trim(),
+                focus: _selectedFocus, 
+                studentId: widget.studentId, // ID real injetado via parâmetro
+                exercises: _selectedExercises,
+              );
+
+              _showSnackBar('Treino salvo na nuvem com sucesso! 🚀', Colors.green);
+              
+              setState(() {
+                _titleController.clear();
+                _selectedExercises.clear();
+              });
+
+              if (mounted) Navigator.pop(context); // Retorna para a tela anterior ao salvar com sucesso
+
+            } catch (e) {
+              _showSnackBar('Erro: $e', Colors.red);
+            } finally {
+              if (mounted) setState(() => _isLoading = false);
+            }
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.deepPurple,
@@ -243,15 +311,18 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
             minimumSize: const Size(double.infinity, 56),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          child: const Text('SALVAR E ENVIAR FICHA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          child: _isLoading 
+              ? const CircularProgressIndicator(color: Colors.white)
+              : const Text('SALVAR E ENVIAR FICHA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ),
       ),
     );
   }
 
-  Widget _buildMiniInput(String label, String initialValue) {
+  Widget _buildMiniInput(String label, int index, String key) {
     return TextFormField(
-      initialValue: initialValue,
+      initialValue: _selectedExercises[index][key].toString(),
+      onChanged: (newValue) => _selectedExercises[index][key] = newValue,
       decoration: InputDecoration(
         labelText: label,
         isDense: true,
@@ -262,7 +333,6 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
     );
   }
 
-  // Diálogo para editar nota do exercício
   void _editNoteDialog(BuildContext context, int index) {
     final noteController = TextEditingController(text: _selectedExercises[index]['note']);
 
@@ -286,9 +356,7 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                setState(() {
-                  _selectedExercises[index]['note'] = noteController.text.trim();
-                });
+                setState(() => _selectedExercises[index]['note'] = noteController.text.trim());
                 Navigator.pop(context);
               },
               child: const Text('Salvar Nota'),
@@ -299,8 +367,9 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
     );
   }
 
-  // Gaveta de Seleção de Exercícios + Atalho para Criar Customizado
   void _showExercisePicker(BuildContext context) {
+    final searchController = TextEditingController();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -309,106 +378,120 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (context, scrollController) {
-            return Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.75,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Biblioteca de Exercícios', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Biblioteca de Exercícios', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                        ],
+                      ),
+                      const SizedBox(height: 12), 
+                      TextField(
+                        controller: searchController,
+                        onChanged: (value) => setModalState(() {}),
+                        decoration: InputDecoration(
+                          hintText: 'Pesquisar exercício...',
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _showCustomExerciseDialog(context);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple.shade50,
+                          foregroundColor: Colors.deepPurple,
+                          elevation: 0,
+                          minimumSize: const Size(double.infinity, 48),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: const Icon(Icons.video_library_outlined),
+                        label: const Text('Não achou? Cadastre com seu próprio vídeo', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Resultados do Catálogo', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: FutureBuilder<List<Map<String, dynamic>>>(
+                          future: _repository.searchExercises(searchController.text.trim()),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (snapshot.hasError) {
+                              return Center(child: Text('Erro ao carregar: ${snapshot.error}'));
+                            }
+
+                            final exercises = snapshot.data ?? [];
+
+                            if (exercises.isEmpty) {
+                              return const Center(
+                                child: Text('Nenhum exercício encontrado no catálogo.', style: TextStyle(color: Colors.grey)),
+                              );
+                            }
+
+                            return ListView.builder(
+                              controller: scrollController,
+                              itemCount: exercises.length,
+                              itemBuilder: (context, index) {
+                                final ex = exercises[index];
+                                return ListTile(
+                                  leading: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: Colors.deepPurple.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.fitness_center, color: Colors.deepPurple, size: 20),
+                                  ),
+                                  title: Text(ex['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  subtitle: Text('${ex['target_muscle'] ?? 'Geral'} • Catálogo Oficial', style: const TextStyle(fontSize: 12)),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.add_circle, color: Colors.deepPurple),
+                                    onPressed: () {
+                                      setState(() {
+                                        _selectedExercises.add({
+                                          'exercise_id': ex['id'],
+                                          'name': ex['name'],
+                                          'custom_media_url': ex['media_url'],
+                                          'sets': '4',
+                                          'reps': '10-12',
+                                          'rest': '60s',
+                                          'note': '',
+                                          'isBiset': false,
+                                        });
+                                      });
+                                      Navigator.pop(context);
+                                    },
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Pesquisar exercício...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Botão Especial: Cadastrar Exercício Próprio com Vídeo
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showCustomExerciseDialog(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple.shade50,
-                      foregroundColor: Colors.deepPurple,
-                      elevation: 0,
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: const Icon(Icons.video_library_outlined),
-                    label: const Text('Não achou? Cadastre exercício com seu vídeo', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Sugestões Rápidas', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
-                  const SizedBox(height: 8),
-
-                  Expanded(
-                    child: ListView(
-                      controller: scrollController,
-                      children: [
-                        ListTile(
-                          leading: const Icon(Icons.fitness_center, color: Colors.deepPurple),
-                          title: const Text('Tríceps Corda na Polia'),
-                          subtitle: const Text('Tríceps • Polia'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.add_circle, color: Colors.deepPurple),
-                            onPressed: () {
-                              setState(() {
-                                _selectedExercises.add({
-                                  'name': 'Tríceps Corda na Polia',
-                                  'sets': '4',
-                                  'reps': '12',
-                                  'rest': '45s',
-                                  'note': '',
-                                  'isBiset': false,
-                                });
-                              });
-                              Navigator.pop(context);
-                            },
-                          ),
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.fitness_center, color: Colors.deepPurple),
-                          title: const Text('Desenvolvimento com Halteres'),
-                          subtitle: const Text('Ombro • Halteres'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.add_circle, color: Colors.deepPurple),
-                            onPressed: () {
-                              setState(() {
-                                _selectedExercises.add({
-                                  'name': 'Desenvolvimento com Halteres',
-                                  'sets': '3',
-                                  'reps': '10',
-                                  'rest': '60s',
-                                  'note': '',
-                                  'isBiset': false,
-                                });
-                              });
-                              Navigator.pop(context);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
@@ -416,7 +499,6 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
     );
   }
 
-  // Modal para Criar Exercício Personalizado com URL de Vídeo/GIF
   void _showCustomExerciseDialog(BuildContext context) {
     final nameController = TextEditingController();
     final urlController = TextEditingController();
@@ -430,10 +512,7 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'Adicione um exercício exclusivo com sua demonstração.',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
-                ),
+                const Text('Adicione um exercício exclusivo com sua demonstração.', style: TextStyle(fontSize: 13, color: Colors.grey)),
                 const SizedBox(height: 16),
                 TextField(
                   controller: nameController,
@@ -443,7 +522,7 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
                 TextField(
                   controller: urlController,
                   decoration: const InputDecoration(
-                    labelText: 'Link do Vídeo ou GIF (URL)', 
+                    labelText: 'Link do Vídeo ou GIF (URL)',
                     hintText: 'https://exemplo.com/video.mp4',
                     border: OutlineInputBorder(),
                   ),
@@ -458,10 +537,11 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                if (nameController.text.isNotEmpty) {
+                if (nameController.text.trim().isNotEmpty) {
                   setState(() {
                     _selectedExercises.add({
                       'name': nameController.text.trim(),
+                      'custom_media_url': urlController.text.trim(),
                       'sets': '4',
                       'reps': '10',
                       'rest': '60s',

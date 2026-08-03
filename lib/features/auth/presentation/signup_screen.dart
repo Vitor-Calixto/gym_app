@@ -1,10 +1,8 @@
-// lib/features/auth/presentation/signup_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-// No topo do login_screen.dart e do signup_screen.dart:
 
-import '../domain/auth_controller.dart'; // 👈 Certifique-se de que o caminho é este!
+import '../domain/auth_controller.dart'; 
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
@@ -14,25 +12,25 @@ class SignUpScreen extends ConsumerStatefulWidget {
 }
 
 class _SignUpScreenState extends ConsumerState<SignUpScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _trainerIdController = TextEditingController(); // 🔴 Adicionado o controller do código
+  final _trainerIdController = TextEditingController(); 
   
-  String _selectedRole = 'student'; // Padrão como Aluno
+  String _selectedRole = 'student'; 
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _trainerIdController.dispose(); // 🔴 Não esqueça de descartar aqui
+    _trainerIdController.dispose(); 
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Escuta o estado para tratar erros ou sucesso no cadastro
     ref.listen<AsyncValue>(
       authControllerProvider,
       (_, state) {
@@ -50,7 +48,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               backgroundColor: Colors.green,
             ),
           );
-          context.pop(); // Volta para a tela de login
+          context.pop(); 
         }
       },
     );
@@ -60,127 +58,133 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Criar Conta - FitClan'),
+        title: const Text('Criar Conta - GymApp'),
       ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Junte-se ao FitClan',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 32),
-
-              // Nome Completo
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nome Completo',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Junte-se ao GymApp',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 ),
-                enabled: !isLoading,
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 32),
 
-              // E-mail
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'E-mail',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
-                ),
-                keyboardType: TextInputType.emailAddress,
-                enabled: !isLoading,
-              ),
-              const SizedBox(height: 16),
-
-              // Senha
-              TextFormField(
-                controller: _passwordController,
-                decoration: const InputDecoration(
-                  labelText: 'Senha',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                ),
-                obscureText: true,
-                enabled: !isLoading,
-              ),
-              const SizedBox(height: 16),
-
-              // Seletor de Perfil (Aluno ou Professor)
-              DropdownButtonFormField<String>(
-                value: _selectedRole,
-                decoration: const InputDecoration(
-                  labelText: 'Tipo de Perfil',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.badge),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'student', child: Text('Aluno')),
-                  DropdownMenuItem(value: 'trainer', child: Text('Professor / Personal')),
-                ],
-                onChanged: isLoading
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _selectedRole = value!;
-                          // Limpa o código se mudar de ideia e virar professor
-                          if (_selectedRole == 'trainer') {
-                            _trainerIdController.clear();
-                          }
-                        });
-                      },
-              ),
-              const SizedBox(height: 16),
-
-              // 🔴 Campo Condicional: Só aparece se for Aluno
-              if (_selectedRole == 'student') ...[
+                // Nome Completo
                 TextFormField(
-                  controller: _trainerIdController,
+                  controller: _nameController,
                   decoration: const InputDecoration(
-                    labelText: 'Código do Professor (Opcional)',
+                    labelText: 'Nome Completo',
                     border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.qr_code), // Um ícone legal para o código
-                    helperText: 'Peça o código de convite ao seu personal.',
+                    prefixIcon: Icon(Icons.person),
                   ),
                   enabled: !isLoading,
+                  validator: (value) => value == null || value.isEmpty ? 'Informe seu nome' : null,
                 ),
                 const SizedBox(height: 16),
-              ],
-              
-              const SizedBox(height: 8),
 
-              // Botão de Cadastrar
-              ElevatedButton(
-                onPressed: isLoading
-                    ? null
-                    : () {
-                        // 🔴 Aqui enviamos o trainerId se ele existir e for aluno
-                        ref.read(authControllerProvider.notifier).signUp(
-                              email: _emailController.text.trim(),
-                              password: _passwordController.text.trim(),
-                              fullName: _nameController.text.trim(),
-                              role: _selectedRole,
-                              trainerId: _selectedRole == 'student' && _trainerIdController.text.isNotEmpty
-                                  ? _trainerIdController.text.trim()
-                                  : null,
-                            );
-                      },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                // E-mail
+                TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'E-mail',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.email),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                  enabled: !isLoading,
+                  validator: (value) => value == null || value.isEmpty ? 'Informe um e-mail' : null,
                 ),
-                child: isLoading
-                    ? const CircularProgressIndicator()
-                    : const Text('CADASTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ],
+                const SizedBox(height: 16),
+
+                // Senha
+                TextFormField(
+                  controller: _passwordController,
+                  decoration: const InputDecoration(
+                    labelText: 'Senha (mínimo 6 caracteres)',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.lock),
+                  ),
+                  obscureText: true,
+                  enabled: !isLoading,
+                  validator: (value) => value == null || value.length < 6 ? 'A senha deve ter no mínimo 6 caracteres' : null,
+                ),
+                const SizedBox(height: 16),
+
+                // Seletor de Perfil
+                DropdownButtonFormField<String>(
+                  value: _selectedRole,
+                  decoration: const InputDecoration(
+                    labelText: 'Tipo de Perfil',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.badge),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'student', child: Text('Aluno')),
+                    DropdownMenuItem(value: 'trainer', child: Text('Professor / Personal')),
+                  ],
+                  onChanged: isLoading
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _selectedRole = value!;
+                            if (_selectedRole == 'trainer') {
+                              _trainerIdController.clear();
+                            }
+                          });
+                        },
+                ),
+                const SizedBox(height: 16),
+
+                // Campo Condicional
+                if (_selectedRole == 'student') ...[
+                  TextFormField(
+                    controller: _trainerIdController,
+                    decoration: const InputDecoration(
+                      labelText: 'Código do Professor (Opcional)',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.qr_code),
+                      helperText: 'Peça o código de convite ao seu personal.',
+                    ),
+                    enabled: !isLoading,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                
+                const SizedBox(height: 8),
+
+                // Botão de Cadastrar
+                ElevatedButton(
+                  onPressed: isLoading
+                      ? null
+                      : () {
+                          if (_formKey.currentState!.validate()) {
+                            ref.read(authControllerProvider.notifier).signUp(
+                                  email: _emailController.text.trim(),
+                                  password: _passwordController.text.trim(),
+                                  fullName: _nameController.text.trim(),
+                                  role: _selectedRole,
+                                  trainerId: _selectedRole == 'student' && _trainerIdController.text.isNotEmpty
+                                      ? _trainerIdController.text.trim()
+                                      : null,
+                                );
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: isLoading
+                      ? const CircularProgressIndicator()
+                      : const Text('CADASTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
           ),
         ),
       ),
