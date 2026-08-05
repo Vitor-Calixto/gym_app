@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-import '../domain/auth_controller.dart';
+import 'package:gymapp/features/auth/domain/auth_controller.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -13,53 +12,117 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _formKey = GlobalKey<FormState>(); // Chave de validação
+  // Chaves e controladores para gerenciar o formulário e os inputs
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  // Variável de estado para controlar a visibilidade da senha (o "olhinho")
+  bool _obscurePassword = true;
+
   @override
   void dispose() {
+    // Boa prática: limpar os controladores da memória ao sair da tela
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  // Traduz os erros retornados pelo Supabase para mensagens amigáveis em português
+  String _getFriendlyErrorMessage(String error) {
+    if (error.contains('invalid_credentials') || error.contains('Invalid login credentials')) {
+      return 'E-mail ou senha incorretos.';
+    } else if (error.contains('user_already_exists')) {
+      return 'Este e-mail já está cadastrado.';
+    } else if (error.contains('invalid-email')) {
+      return 'Formato de e-mail inválido.';
+    }
+    return 'Ocorreu um erro inesperado. Tente novamente.';
+  }
+
+  // Caixa de diálogo (Pop-up) para recuperação de senha
+  void _showResetPasswordDialog() {
+    final resetEmailController = TextEditingController(text: _emailController.text);
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Recuperar Senha'),
+          content: TextField(
+            controller: resetEmailController,
+            decoration: const InputDecoration(
+              labelText: 'Digite seu e-mail cadastrado',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: TextInputType.emailAddress,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final email = resetEmailController.text.trim();
+                if (email.isNotEmpty) {
+                  // Fecha o pop-up ANTES da chamada assíncrona
+                  Navigator.pop(context); 
+                  
+                  try {
+                    await Supabase.instance.client.auth.resetPasswordForEmail(email);
+                    
+                    // CORREÇÃO: Early return se o widget tiver sido desmontado
+                    if (!context.mounted) return;
+                    
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('E-mail de recuperação enviado! Verifique sua caixa de entrada.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } catch (e) {
+                    // CORREÇÃO: Early return também no bloco de erro
+                    if (!context.mounted) return;
+                    
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Erro ao enviar e-mail: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Enviar Link'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    ref.listen<AsyncValue>(
+    // Escuta o estado global de autenticação via Riverpod para redirecionamentos e erros
+    ref.listen(
       authControllerProvider,
-      (previous, next) async {
+      (previous, next) {
         if (next.hasError) {
+          final errorMessage = _getFriendlyErrorMessage(next.error.toString());
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(next.error.toString()),
-              backgroundColor: Colors.red,
-            ),
+            SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
           );
-        } else if (!next.isLoading && !next.hasError && previous?.isLoading == true) {
-          // Busca o perfil do usuário logado para verificar o cargo
-          final user = Supabase.instance.client.auth.currentUser;
-          if (user != null) {
-            try {
-              final response = await Supabase.instance.client
-                  .from('profiles')
-                  .select('role')
-                  .eq('id', user.id)
-                  .single();
+          return;
+        }
 
-              final role = response['role'];
-
-              if (!context.mounted) return;
-
-              if (role == 'professor' || role == 'personal') {
-                context.go('/professor-home');
-              } else {
-                context.go('/home');
-              }
-            } catch (_) {
-              if (!context.mounted) return;
-              context.go('/home'); // Fallback padrão caso dê erro na consulta
-            }
+        // Se o login for bem-sucedido e não estiver carregando, redireciona o usuário
+        if (!next.isLoading && !next.hasError && next.hasValue) {
+          final String? role = next.asData?.value as String?;
+          if (role == 'trainer') {
+            context.go('/professor-home');
+          } else {
+            context.go('/home'); // Aluno como padrão caso a role venha nula
           }
         }
       },
@@ -73,7 +136,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Form(
-            key: _formKey, // Envolvendo os campos no Form
+            key: _formKey,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -81,13 +144,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Icon(Icons.fitness_center, size: 80, color: Theme.of(context).primaryColor),
                 const SizedBox(height: 24),
                 const Text(
-                  'GymApp',
+                  'Gymapp',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 48),
                 
-                // E-mail
+                // Campo de E-mail
                 TextFormField(
                   controller: _emailController,
                   decoration: const InputDecoration(
@@ -101,21 +164,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
                 
-                // Senha
+                // Campo de Senha com o botão de alternar visibilidade (olhinho)
                 TextFormField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Senha',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
                   ),
-                  obscureText: true,
+                  obscureText: _obscurePassword,
                   enabled: !isLoading,
                   validator: (value) => value == null || value.isEmpty ? 'Informe sua senha' : null,
                 ),
-                const SizedBox(height: 24),
                 
-                // Botão Entrar
+                // Botão de Esqueci a Senha
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: isLoading ? null : _showResetPasswordDialog,
+                    child: const Text('Esqueci minha senha'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                
+                // Botão de Entrar
                 ElevatedButton(
                   onPressed: isLoading
                       ? null
@@ -127,15 +207,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 );
                           }
                         },
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                   child: isLoading
-                      ? const CircularProgressIndicator()
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
                       : const Text('ENTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
-                
                 const SizedBox(height: 16),
+                
+                // Link para ir à tela de Cadastro
                 TextButton(
                   onPressed: isLoading ? null : () => context.push('/signup'),
                   child: const Text('Não tem uma conta? Cadastre-se'),

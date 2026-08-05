@@ -1,17 +1,19 @@
-// lib/features/workouts/data/workout_repository.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class WorkoutRepository {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-
- // Busca exercícios no catálogo do Supabase filtrando por nome
-  Future<List<Map<String, dynamic>>> searchExercises(String query) async {
+  // ============================================================
+  // BUSCAR EXERCÍCIOS
+  // ============================================================
+  Future<List<Map<String, dynamic>>> searchExercises(
+    String query,
+  ) async {
     try {
       final response = await _supabase
           .from('exercises')
           .select()
-          .ilike('name', '%$query%') // Busca case-insensitive aproximada
+          .ilike('name', '%$query%')
           .limit(20);
 
       return List<Map<String, dynamic>>.from(response);
@@ -19,7 +21,10 @@ class WorkoutRepository {
       throw Exception('Erro ao buscar exercícios: $e');
     }
   }
-  
+
+  // ============================================================
+  // SALVAR FICHA DE TREINO
+  // ============================================================
   Future<void> saveWorkout({
     required String title,
     required String focus,
@@ -27,46 +32,124 @@ class WorkoutRepository {
     required List<Map<String, dynamic>> exercises,
   }) async {
     try {
-      // 1. Pega o ID do professor logado no momento
-      final trainerId = _supabase.auth.currentUser!.id;
+      // ----------------------------------------------------------
+      // 1. Usuário autenticado
+      // ----------------------------------------------------------
+      final currentUser = _supabase.auth.currentUser;
 
-      // 2. Cria o cabeçalho do Treino e pega o ID gerado
-      final workoutResponse = await _supabase.from('workouts').insert({
-        'title': title,
-        'focus': focus,
-        'student_id': studentId,
-        'trainer_id': trainerId,
-      }).select('id').single();
+      if (currentUser == null) {
+        throw Exception(
+          'Nenhum usuário autenticado. Faça login novamente.',
+        );
+      }
 
-      final String workoutId = workoutResponse['id'];
+      final trainerId = currentUser.id;
 
-      // 3. Prepara a lista de exercícios para salvar de uma vez só (Batch Insert)
+      // ----------------------------------------------------------
+      // 2. Criar o cabeçalho da ficha
+      // ----------------------------------------------------------
+      final workoutResponse = await _supabase
+          .from('workouts')
+          .insert({
+            'title': title,
+            'focus': focus,
+            'student_id': studentId,
+            'trainer_id': trainerId,
+          })
+          .select('id')
+          .single();
+
+      final String workoutId = workoutResponse['id'].toString();
+
+      // ----------------------------------------------------------
+      // 3. Preparar os exercícios
+      // ----------------------------------------------------------
       final List<Map<String, dynamic>> itemsToInsert = [];
-      
+
       for (int i = 0; i < exercises.length; i++) {
         final ex = exercises[i];
-        
-        // Limpa o "s" do descanso para salvar como número (ex: "60s" vira 60)
-        final int restTime = int.tryParse(ex['rest'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 60;
-        final int setsCount = int.tryParse(ex['sets'].toString()) ?? 3;
 
-        itemsToInsert.add({
+        // --------------------------------------------------------
+        // Séries
+        // --------------------------------------------------------
+        final int setsCount =
+            int.tryParse(ex['sets']?.toString() ?? '') ?? 3;
+
+        // --------------------------------------------------------
+        // Descanso
+        //
+        // Exemplos:
+        // "60s" -> 60
+        // "90 segundos" -> 90
+        // "45" -> 45
+        // --------------------------------------------------------
+        final int restTime = int.tryParse(
+              (ex['rest']?.toString() ?? '')
+                  .replaceAll(RegExp(r'[^0-9]'), ''),
+            ) ??
+            60;
+
+        // --------------------------------------------------------
+        // ID do exercício do catálogo
+        // --------------------------------------------------------
+        final dynamic exerciseId = ex['exercise_id'];
+
+        // --------------------------------------------------------
+        // Montamos o item básico.
+        // --------------------------------------------------------
+        final Map<String, dynamic> item = {
           'workout_id': workoutId,
-          'custom_exercise_name': ex['name'], // Salvando como customizado por enquanto
           'sets': setsCount,
-          'reps': ex['reps'],
+          'reps': ex['reps']?.toString() ?? '',
           'rest_seconds': restTime,
-          'note': ex['note'],
-          'is_biset': ex['isBiset'],
-          'order_index': i, // Salva a ordem exata que o professor organizou na tela
-        });
+          'note': ex['note']?.toString() ?? '',
+          'is_biset': ex['isBiset'] == true,
+          'order_index': i,
+        };
+
+        // --------------------------------------------------------
+        // EXERCÍCIO DO CATÁLOGO
+        // --------------------------------------------------------
+        //
+        // Quando veio da tabela exercises, salvamos o ID real.
+        //
+        if (exerciseId != null &&
+            exerciseId.toString().trim().isNotEmpty) {
+          item['exercise_id'] = exerciseId;
+        }
+
+        // --------------------------------------------------------
+        // EXERCÍCIO PERSONALIZADO
+        // --------------------------------------------------------
+        //
+        // Quando não existe exercise_id, usamos os campos
+        // customizados.
+        //
+        else {
+          final customName = ex['name']?.toString().trim() ?? '';
+          final customMediaUrl =
+              ex['custom_media_url']?.toString().trim() ?? '';
+
+          if (customName.isNotEmpty) {
+            item['custom_exercise_name'] = customName;
+          }
+
+          if (customMediaUrl.isNotEmpty) {
+            item['custom_media_url'] = customMediaUrl;
+          }
+        }
+
+        itemsToInsert.add(item);
       }
 
-      // 4. Envia todos os exercícios para o banco
+      // ----------------------------------------------------------
+      // 4. Salvar todos os exercícios
+      // ----------------------------------------------------------
       if (itemsToInsert.isNotEmpty) {
-        await _supabase.from('workout_items').insert(itemsToInsert);
+        await _supabase
+            .from('workout_items')
+            .insert(itemsToInsert);
       }
-      
     } catch (e) {
       throw Exception('Erro ao salvar treino: $e');
     }

@@ -297,7 +297,8 @@ class _WorkoutBuilderScreenState extends State<WorkoutBuilderScreen> {
                 _selectedExercises.clear();
               });
 
-              if (mounted) Navigator.pop(context); // Retorna para a tela anterior ao salvar com sucesso
+             if (!mounted) return;
+Navigator.pop(context); // Retorna para a tela anterior ao salvar com sucesso
 
             } catch (e) {
               _showSnackBar('Erro: $e', Colors.red);

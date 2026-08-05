@@ -2,7 +2,9 @@
 import 'package:flutter/material.dart';
 
 class AssessmentScreen extends StatelessWidget {
-  const AssessmentScreen({super.key});
+  final String? studentId;
+  
+  const AssessmentScreen({super.key, this.studentId});
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +19,7 @@ class AssessmentScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
             onPressed: () {
-              // Ação para adicionar nova avaliação
+              // TODO: Ação para adicionar nova avaliação física
             },
           )
         ],
@@ -37,11 +39,18 @@ class AssessmentScreen extends StatelessWidget {
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))],
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.withOpacity(0.3), 
+                    blurRadius: 8, 
+                    offset: const Offset(0, 4)
+                  )
+                ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
+                  // TODO: Estes dados devem vir do Riverpod/Supabase no futuro
                   _buildSummaryItem('Peso Atual', '78.5 kg', Icons.monitor_weight),
                   Container(height: 40, width: 1, color: Colors.white38),
                   _buildSummaryItem('Gordura (BF)', '14.2 %', Icons.pie_chart),
@@ -49,17 +58,23 @@ class AssessmentScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Última atualização: 10/08/2026', style: TextStyle(color: Colors.grey, fontSize: 12)),
+            const Text(
+              'Última atualização: 10/08/2026', 
+              style: TextStyle(color: Colors.grey, fontSize: 12)
+            ),
             const SizedBox(height: 20),
 
-            const Text('Medidas Corporais (cm)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text(
+              'Medidas Corporais (cm)', 
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+            ),
             const SizedBox(height: 12),
 
-            // Grid Compacto de Medidas (muito mais bonito e proporcional)
+            // Grid Compacto de Medidas (Proporcional)
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+              physics: const NeverScrollableScrollPhysics(), // Evita conflito com o SingleChildScrollView
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
               childAspectRatio: 1.6,
@@ -78,6 +93,7 @@ class AssessmentScreen extends StatelessWidget {
     );
   }
 
+  // Widget auxiliar para os itens do topo (Peso e BF)
   Widget _buildSummaryItem(String label, String value, IconData icon) {
     return Column(
       children: [
@@ -90,13 +106,20 @@ class AssessmentScreen extends StatelessWidget {
     );
   }
 
+  // Widget auxiliar para os cards do Grid (Medidas do corpo)
   Widget _buildMeasureCard(String title, String value, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.08), blurRadius: 4, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.08), 
+            blurRadius: 4, 
+            offset: const Offset(0, 2)
+          )
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,11 +129,17 @@ class AssessmentScreen extends StatelessWidget {
             children: [
               Icon(icon, size: 16, color: Colors.blue[700]),
               const SizedBox(width: 6),
-              Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500)),
+              Text(
+                title, 
+                style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500)
+              ),
             ],
           ),
           const Spacer(),
-          Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+          Text(
+            value, 
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)
+          ),
         ],
       ),
     );

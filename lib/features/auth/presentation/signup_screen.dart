@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-import '../domain/auth_controller.dart'; 
+import 'package:gymapp/features/auth/domain/auth_controller.dart'; 
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
@@ -12,13 +11,15 @@ class SignUpScreen extends ConsumerStatefulWidget {
 }
 
 class _SignUpScreenState extends ConsumerState<SignUpScreen> {
+  // Controladores dos campos de texto do cadastro
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _trainerIdController = TextEditingController(); 
   
-  String _selectedRole = 'student'; 
+  String _selectedRole = 'student'; // 'student' (aluno) ou 'trainer' (professor)
+  bool _obscurePassword = true;     // Estado do "olhinho" de ver senha
 
   @override
   void dispose() {
@@ -31,15 +32,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Observa o estado do AuthController para feedback de sucesso ou erro
     ref.listen<AsyncValue>(
       authControllerProvider,
       (_, state) {
         if (state.hasError) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.error.toString()),
-              backgroundColor: Colors.red,
-            ),
+            SnackBar(content: Text(state.error.toString()), backgroundColor: Colors.red),
           );
         } else if (!state.isLoading && !state.hasError && state.hasValue) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -48,7 +47,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               backgroundColor: Colors.green,
             ),
           );
-          context.pop(); 
+          context.pop(); // Retorna para a tela de login
         }
       },
     );
@@ -103,21 +102,29 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Senha
+                // Senha com botão de ver/ocultar
                 TextFormField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Senha (mínimo 6 caracteres)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
                   ),
-                  obscureText: true,
+                  obscureText: _obscurePassword,
                   enabled: !isLoading,
                   validator: (value) => value == null || value.length < 6 ? 'A senha deve ter no mínimo 6 caracteres' : null,
                 ),
                 const SizedBox(height: 16),
 
-                // Seletor de Perfil
+                // Seletor de Tipo de Perfil (Aluno ou Professor)
                 DropdownButtonFormField<String>(
                   value: _selectedRole,
                   decoration: const InputDecoration(
@@ -142,7 +149,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Campo Condicional
+                // Campo condicional: Exibido apenas se o perfil selecionado for 'Aluno'
                 if (_selectedRole == 'student') ...[
                   TextFormField(
                     controller: _trainerIdController,
@@ -176,11 +183,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                                 );
                           }
                         },
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                   child: isLoading
-                      ? const CircularProgressIndicator()
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
                       : const Text('CADASTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ],

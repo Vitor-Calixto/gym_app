@@ -1,135 +1,473 @@
-import 'package:flutter/material.dart';
+// lib/features/workouts/presentation/workouts_screen.dart
 
-class WorkoutsScreen extends StatefulWidget {
-  const WorkoutsScreen({super.key});
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:gymapp/features/workouts/data/workout_repository.dart';
+
+/// ===============================================================
+/// TELA DE TREINOS
+/// ===============================================================
+///
+/// Pode ser utilizada por:
+///
+/// ALUNO:
+/// /workouts
+///
+/// PROFESSOR:
+/// /workouts + studentId
+///
+/// O studentId vem pelo state.extra do GoRouter.
+/// ===============================================================
+
+class WorkoutsScreen extends ConsumerStatefulWidget {
+  final String? studentId;
+
+  const WorkoutsScreen({
+    super.key,
+    this.studentId,
+  });
 
   @override
-  State<WorkoutsScreen> createState() => _WorkoutsScreenState();
+  ConsumerState<WorkoutsScreen> createState() =>
+      _WorkoutsScreenState();
 }
 
-class _WorkoutsScreenState extends State<WorkoutsScreen> {
-  // Controle simples para saber qual ficha está selecionada na tela
-  String _selectedFicha = 'A';
+class _WorkoutsScreenState
+    extends ConsumerState<WorkoutsScreen> {
+  String? _selectedWorkoutId;
+
+  String? get _effectiveStudentId {
+    /// Se o professor abriu um aluno específico,
+    /// usamos esse ID.
+    if (widget.studentId != null &&
+        widget.studentId!.isNotEmpty) {
+      return widget.studentId;
+    }
+
+    /// Caso contrário, estamos na tela do próprio aluno.
+    return Supabase
+        .instance
+        .client
+        .auth
+        .currentUser
+        ?.id;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final studentId =
+        _effectiveStudentId;
+
+    if (studentId == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            'Não foi possível identificar o aluno.',
+          ),
+        ),
+      );
+    }
+
+    final workoutsAsync = ref.watch(
+      studentWorkoutsProvider(studentId),
+    );
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
+
+      /// ==========================================================
+      /// APP BAR
+      /// ==========================================================
+
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Meus Treinos', style: TextStyle(color: Colors.black)),
+
+        iconTheme:
+            const IconThemeData(
+          color: Colors.black,
+        ),
+
+        title: const Text(
+          'Meus Treinos',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
-      body: Column(
-        children: [
-          // Seletor de Fichas (A, B, C...)
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildFichaSelector('A', 'Peito & Tríceps'),
-                const SizedBox(width: 12),
-                _buildFichaSelector('B', 'Costas & Bíceps'),
-                const SizedBox(width: 12),
-                _buildFichaSelector('C', 'Pernas & Ombro'),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 16),
 
-          // Resumo do Treino Selecionado
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Ficha $_selectedFicha - Exercícios', 
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
-                ),
-                Text(
-                  'Aprox. 45 min',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                ),
-              ],
+        actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.refresh,
             ),
-          ),
-          
-          const SizedBox(height: 12),
-
-          // Lista de Exercícios (Muda dependendo da ficha, aqui está fixo para visualização)
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              physics: const BouncingScrollPhysics(),
-              children: [
-                _buildExerciseCard('Supino Reto', 'Barra livre', '4', '10 a 12', '20kg - 20kg'),
-                _buildExerciseCard('Supino Inclinado', 'Halteres', '3', '10', '16kg'),
-                _buildExerciseCard('Crucifixo Máquina', 'Peck Deck', '3', 'FALHA', '35kg'),
-                _buildExerciseCard('Tríceps Pulley', 'Cabo - Barra Reta', '4', '12', '25kg'),
-                _buildExerciseCard('Tríceps Testa', 'Halteres', '3', '10', '10kg'),
-                const SizedBox(height: 80), // Espaço para o botão flutuante não tampar o último item
-              ],
-            ),
+            onPressed: () {
+              ref.invalidate(
+                studentWorkoutsProvider(
+                  studentId,
+                ),
+              );
+            },
           ),
         ],
       ),
-      
-      // Botão Flutuante para Iniciar o Treino
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // Lógica para iniciar cronômetro/modo treino
+
+      /// ==========================================================
+      /// BODY
+      /// ==========================================================
+
+      body: workoutsAsync.when(
+        loading: () => const Center(
+          child: CircularProgressIndicator(),
+        ),
+
+        error: (error, stack) =>
+            _buildError(error),
+
+        data: (workouts) {
+          if (workouts.isEmpty) {
+            return _buildEmptyState(
+              context,
+            );
+          }
+
+          /// Se ainda não existe treino selecionado,
+          /// selecionamos automaticamente o primeiro.
+          if (_selectedWorkoutId == null) {
+            _selectedWorkoutId =
+                workouts.first['id']
+                    ?.toString();
+          }
+
+          final selectedWorkout =
+              workouts.firstWhere(
+            (workout) =>
+                workout['id']
+                    ?.toString() ==
+                _selectedWorkoutId,
+
+            orElse: () => workouts.first,
+          );
+
+          final exercises =
+              List<Map<String, dynamic>>.from(
+            selectedWorkout[
+                    'workout_items'] ??
+                [],
+          );
+
+          return Column(
+            children: [
+              /// ---------------------------------------------------
+              /// SELETOR DE TREINOS
+              /// ---------------------------------------------------
+
+              Container(
+                color: Colors.white,
+
+                padding:
+                    const EdgeInsets.symmetric(
+                  vertical: 14,
+                  horizontal: 10,
+                ),
+
+                child: SizedBox(
+                  height: 82,
+
+                  child: ListView.separated(
+                    scrollDirection:
+                        Axis.horizontal,
+
+                    itemCount:
+                        workouts.length,
+
+                    separatorBuilder:
+                        (_, __) =>
+                            const SizedBox(
+                      width: 10,
+                    ),
+
+                    itemBuilder:
+                        (context, index) {
+                      final workout =
+                          workouts[index];
+
+                      final id =
+                          workout['id']
+                              ?.toString();
+
+                      final title =
+                          workout['title']
+                                  ?.toString() ??
+                              'Treino';
+
+                      final focus =
+                          workout['focus']
+                                  ?.toString() ??
+                              '';
+
+                      return _buildWorkoutSelector(
+                        id: id,
+                        title: title,
+                        focus: focus,
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              /// ---------------------------------------------------
+              /// CABEÇALHO
+              /// ---------------------------------------------------
+
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(
+                  horizontal: 16,
+                ),
+
+                child: Row(
+                  mainAxisAlignment:
+                      MainAxisAlignment
+                          .spaceBetween,
+
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment
+                                .start,
+
+                        children: [
+                          Text(
+                            selectedWorkout[
+                                    'title']
+                                ?.toString() ??
+                                'Treino',
+
+                            style:
+                                const TextStyle(
+                              fontSize: 20,
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
+                          ),
+
+                          const SizedBox(
+                            height: 4,
+                          ),
+
+                          Text(
+                            selectedWorkout[
+                                    'focus']
+                                ?.toString() ??
+                                'Treino personalizado',
+
+                            style: TextStyle(
+                              color:
+                                  Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    Text(
+                      '${exercises.length} exercícios',
+                      style: TextStyle(
+                        color:
+                            Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              /// ---------------------------------------------------
+              /// LISTA
+              /// ---------------------------------------------------
+
+              Expanded(
+                child: ListView.builder(
+                  padding:
+                      const EdgeInsets.symmetric(
+                    horizontal: 16,
+                  ),
+
+                  itemCount:
+                      exercises.length + 1,
+
+                  itemBuilder:
+                      (context, index) {
+                    if (index ==
+                        exercises.length) {
+                      return const SizedBox(
+                        height: 100,
+                      );
+                    }
+
+                    return _buildExerciseCard(
+                      exercises[index],
+                      index,
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
         },
-        backgroundColor: Colors.black87,
-        icon: const Icon(Icons.play_arrow, color: Colors.white),
-        label: const Text('Iniciar Treino', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+
+      /// ==========================================================
+      /// BOTÃO INICIAR
+      /// ==========================================================
+
+      floatingActionButton:
+          workoutsAsync.maybeWhen(
+        data: (workouts) {
+          if (workouts.isEmpty) {
+            return null;
+          }
+
+          return FloatingActionButton.extended(
+            backgroundColor:
+                Colors.black87,
+
+            onPressed: () {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Modo treino será iniciado aqui.',
+                  ),
+                ),
+              );
+            },
+
+            icon: const Icon(
+              Icons.play_arrow,
+              color: Colors.white,
+            ),
+
+            label: const Text(
+              'Iniciar Treino',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight:
+                    FontWeight.bold,
+              ),
+            ),
+          );
+        },
+
+        orElse: () => null,
+      ),
+
+      floatingActionButtonLocation:
+          FloatingActionButtonLocation
+              .centerFloat,
     );
   }
 
-  // --- Widgets Auxiliares ---
+  /// ===============================================================
+  /// SELETOR DE TREINO
+  /// ===============================================================
 
-  Widget _buildFichaSelector(String ficha, String title) {
-    bool isSelected = _selectedFicha == ficha;
-    
+  Widget _buildWorkoutSelector({
+    required String? id,
+    required String title,
+    required String focus,
+  }) {
+    final selected =
+        id == _selectedWorkoutId;
+
     return GestureDetector(
       onTap: () {
         setState(() {
-          _selectedFicha = ficha;
+          _selectedWorkoutId = id;
         });
       },
+
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.black87 : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? Colors.black87 : Colors.grey.shade300),
-          boxShadow: isSelected 
-              ? [BoxShadow(color: Colors.black26, blurRadius: 6, offset: const Offset(0, 3))]
-              : [],
+        width: 125,
+
+        padding:
+            const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
         ),
+
+        decoration: BoxDecoration(
+          color: selected
+              ? Colors.black87
+              : Colors.white,
+
+          borderRadius:
+              BorderRadius.circular(15),
+
+          border: Border.all(
+            color: selected
+                ? Colors.black87
+                : Colors.grey.shade300,
+          ),
+
+          boxShadow: selected
+              ? [
+                  const BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 7,
+                    offset:
+                        Offset(0, 3),
+                  ),
+                ]
+              : null,
+        ),
+
         child: Column(
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+
           children: [
             Text(
-              'Ficha $ficha',
+              title,
+              maxLines: 1,
+              overflow:
+                  TextOverflow.ellipsis,
+
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : Colors.black87,
+                color: selected
+                    ? Colors.white
+                    : Colors.black87,
+
+                fontWeight:
+                    FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 4),
+
+            const SizedBox(height: 5),
+
             Text(
-              title,
+              focus,
+              maxLines: 1,
+              overflow:
+                  TextOverflow.ellipsis,
+
               style: TextStyle(
+                color: selected
+                    ? Colors.white70
+                    : Colors.grey,
+
                 fontSize: 10,
-                color: isSelected ? Colors.white70 : Colors.grey,
               ),
             ),
           ],
@@ -138,79 +476,375 @@ class _WorkoutsScreenState extends State<WorkoutsScreen> {
     );
   }
 
-  Widget _buildExerciseCard(String name, String details, String sets, String reps, String weight) {
+  /// ===============================================================
+  /// CARD DO EXERCÍCIO
+  /// ===============================================================
+
+  Widget _buildExerciseCard(
+    Map<String, dynamic> exercise,
+    int index,
+  ) {
+    final name =
+        exercise['custom_exercise_name']
+                ?.toString() ??
+            'Exercício';
+
+    final sets =
+        exercise['sets']?.toString() ??
+            '3';
+
+    final reps =
+        exercise['reps']?.toString() ??
+            '10';
+
+    final rest =
+        exercise['rest_seconds']
+                ?.toString() ??
+            '60';
+
+    final note =
+        exercise['note']?.toString();
+
+    final isBiset =
+        exercise['is_biset'] == true;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin:
+          const EdgeInsets.only(bottom: 12),
+
+      padding: const EdgeInsets.all(14),
+
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+
+        borderRadius:
+            BorderRadius.circular(18),
+
         boxShadow: [
-          BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 3))
+          BoxShadow(
+            color:
+                Colors.black.withValues(
+              alpha: 0.04,
+            ),
+
+            blurRadius: 8,
+
+            offset:
+                const Offset(0, 3),
+          ),
         ],
       ),
+
       child: Row(
         children: [
-          // Imagem/Ícone do exercício (Usando placeholder)
+          /// Imagem ilustrativa.
           Container(
-            width: 60,
-            height: 60,
+            width: 66,
+            height: 66,
+
             decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(12),
-              image: const DecorationImage(
-                image: NetworkImage('https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=200&auto=format&fit=crop'),
+              borderRadius:
+                  BorderRadius.circular(14),
+
+              image:
+                  const DecorationImage(
+                image: NetworkImage(
+                  'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=300&auto=format&fit=crop',
+                ),
+
                 fit: BoxFit.cover,
-              )
+              ),
             ),
           ),
-          const SizedBox(width: 16),
-          
-          // Informações do exercício
+
+          const SizedBox(width: 14),
+
+          /// Informações
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+
               children: [
-                Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 4),
-                Text(details, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                const SizedBox(height: 12),
-                
-                // Tags de Séries, Repetições e Carga
                 Row(
                   children: [
-                    _buildTag('${sets}x $reps', Colors.blue),
-                    const SizedBox(width: 8),
-                    _buildTag(weight, Colors.orange),
+                    Expanded(
+                      child: Text(
+                        name,
+                        style:
+                            const TextStyle(
+                          fontWeight:
+                              FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+
+                    if (isBiset)
+                      Container(
+                        padding:
+                            const EdgeInsets
+                                .symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              Colors.purple[50],
+                          borderRadius:
+                              BorderRadius
+                                  .circular(
+                            6,
+                          ),
+                        ),
+
+                        child: const Text(
+                          'BISET',
+                          style: TextStyle(
+                            color:
+                                Colors.purple,
+                            fontSize: 9,
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                        ),
+                      ),
                   ],
-                )
+                ),
+
+                const SizedBox(height: 5),
+
+                Text(
+                  'Descanso: ${rest}s',
+                  style: TextStyle(
+                    color:
+                        Colors.grey[600],
+                    fontSize: 11,
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 5,
+
+                  children: [
+                    _tag(
+                      '${sets}x $reps',
+                      Colors.blue,
+                    ),
+
+                    if (note != null &&
+                        note.isNotEmpty)
+                      _tag(
+                        note,
+                        Colors.orange,
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
-          
-          // Checkbox para marcar como feito
+
+          const SizedBox(width: 5),
+
+          /// Check do exercício
           IconButton(
-            icon: const Icon(Icons.check_circle_outline, color: Colors.grey, size: 28),
-            onPressed: () {
-              // Lógica de marcar exercício
-            },
-          )
+            onPressed: () {},
+            icon: const Icon(
+              Icons.check_circle_outline,
+              color: Colors.grey,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildTag(String text, MaterialColor color) {
+  /// ===============================================================
+  /// TAG
+  /// ===============================================================
+
+  Widget _tag(
+    String text,
+    MaterialColor color,
+  ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 5,
+      ),
+
       decoration: BoxDecoration(
         color: color[50],
-        borderRadius: BorderRadius.circular(6),
+        borderRadius:
+            BorderRadius.circular(7),
       ),
+
       child: Text(
         text,
-        style: TextStyle(color: color[700], fontSize: 11, fontWeight: FontWeight.bold),
+        style: TextStyle(
+          color: color[700],
+          fontSize: 10,
+          fontWeight:
+              FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  /// ===============================================================
+  /// ESTADO VAZIO
+  /// ===============================================================
+
+  Widget _buildEmptyState(
+    BuildContext context,
+  ) {
+    return Center(
+      child: Padding(
+        padding:
+            const EdgeInsets.all(30),
+
+        child: Column(
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+
+          children: [
+            Container(
+              width: 120,
+              height: 120,
+
+              decoration: BoxDecoration(
+                color: Colors.deepPurple[50],
+                shape: BoxShape.circle,
+              ),
+
+              child: const Icon(
+                Icons.fitness_center,
+                size: 60,
+                color: Colors.deepPurple,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            const Text(
+              'Nenhum treino encontrado',
+              textAlign: TextAlign.center,
+
+              style: TextStyle(
+                fontSize: 21,
+                fontWeight:
+                    FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            const Text(
+              'Quando um professor criar um treino para este aluno, ele aparecerá automaticamente aqui.',
+              textAlign: TextAlign.center,
+
+              style: TextStyle(
+                color: Colors.grey,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            OutlinedButton.icon(
+              onPressed: () {
+                ref.invalidate(
+                  studentWorkoutsProvider(
+                    _effectiveStudentId!,
+                  ),
+                );
+              },
+
+              icon: const Icon(
+                Icons.refresh,
+              ),
+
+              label: const Text(
+                'Atualizar',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// ===============================================================
+  /// ERRO
+  /// ===============================================================
+
+  Widget _buildError(
+    Object error,
+  ) {
+    return Center(
+      child: Padding(
+        padding:
+            const EdgeInsets.all(24),
+
+        child: Column(
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: 60,
+              color: Colors.red,
+            ),
+
+            const SizedBox(height: 15),
+
+            const Text(
+              'Não foi possível carregar os treinos.',
+              textAlign: TextAlign.center,
+
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight:
+                    FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              error.toString(),
+              textAlign: TextAlign.center,
+
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
+
+/// ===============================================================
+/// PROVIDER DOS TREINOS
+/// ===============================================================
+
+final studentWorkoutsProvider =
+    FutureProvider.family<
+        List<Map<String, dynamic>>,
+        String>((ref, studentId) async {
+  final repository =
+      ref.read(workoutRepositoryProvider);
+
+  return repository.getStudentWorkouts(
+    studentId,
+  );
+});
